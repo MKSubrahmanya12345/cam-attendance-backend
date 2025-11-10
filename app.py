@@ -27,17 +27,29 @@ except FirebaseError as e:
 
 # --- Initialize Flask ---
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "https://cam-attendance-frontend.vercel.app"
-]}})
 
+# ✅ CORS FIX — handles OPTIONS + Authorization + all routes
+CORS(app,
+     resources={r"/*": {"origins": [
+         "http://127.0.0.1:5500",
+         "http://localhost:5500",
+         "https://cam-attendance-frontend.vercel.app"
+     ]}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "OPTIONS"])
 
+# --- Ensure base directory exists ---
 if not os.path.exists(ROOT_DIR):
     os.makedirs(ROOT_DIR)
 
+
+# --- Helper: Extract branch and ID from email ---
 def get_usn_from_email(email):
+    """
+    Extracts branch code and user ID from email.
+    Example: cs_124@nmamit.in -> ('CS', 'CS_124')
+    """
     match = re.search(r'([a-z]{2})(\d{3})@nmamit\.in', email)
     if match:
         branch = match.group(1).upper()
@@ -46,9 +58,12 @@ def get_usn_from_email(email):
     else:
         return "UNKNOWN", email.split('@')[0].replace('.', '_')
 
+
+# --- Route: Enrollment ---
 @app.route('/enroll', methods=['POST'])
 def enroll():
     try:
+        # --- Auth verification ---
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({"status": "error", "message": "Missing auth token"}), 401
@@ -61,6 +76,7 @@ def enroll():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Auth failed: {e}"}), 401
 
+    # --- Directory structure ---
     branch, usn_folder = get_usn_from_email(email)
     print(f"[INFO] Enrollment request from {email} -> {branch}/{usn_folder}")
 
@@ -69,6 +85,7 @@ def enroll():
     os.makedirs(person_dir, exist_ok=True)
 
     try:
+        # --- Handle incoming data ---
         data = request.get_json()
         if not data or 'images' not in data:
             return jsonify({"status": "error", "message": "'images' missing"}), 400
@@ -77,6 +94,7 @@ def enroll():
         if len(imgs) != 5:
             return jsonify({"status": "error", "message": f"Expected 5 images, got {len(imgs)}"}), 400
 
+        # --- Save images ---
         angles = ["frontal", "left", "right", "up", "down"]
         for i, durl in enumerate(imgs):
             encoded = durl.split(",", 1)[1] if "," in durl else durl
@@ -84,12 +102,16 @@ def enroll():
             path = os.path.join(person_dir, f"{angles[i]}.jpg")
             with open(path, "wb") as f:
                 f.write(binary)
+
         print(f"[SUCCESS] Saved 5 images for {usn_folder}")
         return jsonify({"status": "success", "message": "Images saved"}), 200
+
     except Exception as e:
         print(f"[ERROR] {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+# --- Main entry ---
 if __name__ == "__main__":
     print("[INFO] Server running on 0.0.0.0:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)
