@@ -27,7 +27,12 @@ except FirebaseError as e:
 
 # --- Initialize Flask ---
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "https://cam-attendance-frontend.vercel.app"
+]}})
+
 
 if not os.path.exists(ROOT_DIR):
     os.makedirs(ROOT_DIR)
